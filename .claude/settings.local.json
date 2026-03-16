@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(networksetup -getairportnetwork en0)",
+      "Bash(ping -c 2 -t 3 172.20.10.6)",
+      "Bash(nc -z -w 3 172.20.10.6 8080)",
+      "Bash(python3 -c \":*)",
+      "Bash(conda info:*)",
+      "Read(//Users/vved/anaconda3/**)",
+      "Read(//Users/vved/miniconda3/**)",
+      "Read(//Users/vved/miniforge3/**)",
+      "Read(//opt/homebrew/bin/**)",
+      "Bash(/opt/anaconda3/bin/python3 -c \":*)",
+      "Bash(/opt/anaconda3/bin/python3 train_cnn.py)",
+      "Bash(/opt/anaconda3/bin/python3 /Users/vved/AI/RPSCnn/train_cnn.py)",
+      "Bash(/opt/anaconda3/bin/python3 /Users/vved/AI/RPSCnn/export_binary_weights.py)",
+      "Bash(/opt/anaconda3/bin/python3 /Users/vved/AI/RPSCnn/reprocess_dataset.py)",
+      "Bash(find /Users/vved/AI/RPSCnn -type f -exec ls -lh {})",
+      "Bash(sort -k2)"
+    ]
+  }
+}
