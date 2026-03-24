@@ -352,6 +352,40 @@ def extract_pixels_from_32x32_bmp(bmp_data, threshold_value=128):
             # Normalize: 0 → 0.0, 255 → 1.0
             pixels[row * 32 + col] = px / 255.0
 
+    # Normalize orientation so hand always enters from left
+    pixels = normalize_orientation_flat(pixels)
+    return pixels
+
+
+def normalize_orientation_flat(pixels):
+    """Rotate 32x32 flat pixel array so hand (black pixels, value < 0.5)
+    enters from the top edge. Must match train_cnn.py normalize_orientation()."""
+    top = sum(1 for x in range(32) if pixels[x] < 0.5)
+    bottom = sum(1 for x in range(32) if pixels[31*32 + x] < 0.5)
+    left = sum(1 for y in range(32) if pixels[y*32] < 0.5)
+    right = sum(1 for y in range(32) if pixels[y*32 + 31] < 0.5)
+
+    counts = [('left', left), ('right', right), ('top', top), ('bottom', bottom)]
+    dominant = max(counts, key=lambda c: c[1])[0]
+
+    if dominant == 'top':
+        return pixels
+    elif dominant == 'bottom':
+        return list(reversed(pixels))
+    elif dominant == 'left':
+        # 90 CW: left→top. old[y][x] → new[x][31-y]
+        out = [0.0] * 1024
+        for y in range(32):
+            for x in range(32):
+                out[x * 32 + (31 - y)] = pixels[y * 32 + x]
+        return out
+    elif dominant == 'right':
+        # 90 CCW: right→top. old[y][x] → new[31-x][y]
+        out = [0.0] * 1024
+        for y in range(32):
+            for x in range(32):
+                out[(31 - x) * 32 + y] = pixels[y * 32 + x]
+        return out
     return pixels
 
 
@@ -366,9 +400,6 @@ print(f"  Results print to serial every few seconds")
 print("=" * 40 + "\n")
 
 # Fixed threshold to match training data preprocessing
-# Training used np.mean() on grayscale images, which for typical
-# hand-against-background images gives ~128. Using fixed 128
-# ensures ESP preprocessing matches training preprocessing.
 THRESHOLD = 128
 print(f"[OK]   Using fixed threshold: {THRESHOLD}")
 
@@ -376,18 +407,16 @@ inference_count = 0
 
 while True:
     try:
+        gc.collect()
         t_start = ticks_ms()
 
-        # Capture 96x96 BMP
-        gc.collect()
+        # Capture
         raw_img = cam.capture()
-        t_capture = ticks_ms()
 
         # Preprocess: resize 128x128 RGB → 32x32 grayscale + threshold
         small_bmp = preprocess_camera_bmp(raw_img, THRESHOLD)
-        del raw_img  # free the large buffer
+        del raw_img
         gc.collect()
-        t_preprocess = ticks_ms()
 
         # Extract normalized pixel array from 32x32 BMP
         pixels = extract_pixels_from_32x32_bmp(small_bmp, THRESHOLD)
@@ -395,29 +424,24 @@ while True:
         gc.collect()
 
         # Run CNN inference
-        class_name, confidence, all_probs = predict(pixels)
+        class_name, confidence, probs = predict(pixels)
         del pixels
         gc.collect()
-        t_inference = ticks_ms()
 
+        t_end = ticks_ms()
         inference_count += 1
+        total_ms = ticks_diff(t_end, t_start)
 
-        # Print result
-        # Format probabilities
+        # Format output
         prob_str = " | ".join(
-            f"{CLASSES[i]}:{all_probs[i]:.0%}" for i in range(len(CLASSES))
+            f"{CLASSES[i]}:{probs[i]:.0%}" for i in range(len(CLASSES))
         )
-        total_ms = ticks_diff(t_inference, t_start)
-        cap_ms = ticks_diff(t_capture, t_start)
-        pre_ms = ticks_diff(t_preprocess, t_capture)
-        inf_ms = ticks_diff(t_inference, t_preprocess)
 
         print(f"[#{inference_count:3d}] {class_name:>8s} ({confidence:.0%})  "
               f"| {prob_str} "
-              f"| {total_ms}ms (cap:{cap_ms} pre:{pre_ms} inf:{inf_ms})")
+              f"| {total_ms}ms")
 
-        # Brief pause to allow serial output to flush
-        sleep(1)
+        sleep(0.5)
 
     except KeyboardInterrupt:
         print("\n[STOP] Inference stopped by user")

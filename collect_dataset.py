@@ -16,7 +16,7 @@ Workflow:
 Requirements (install on Mac):
     pip install Pillow
 
-Original code by project author. No borrowed code in this file.
+Original code by Claude. No borrowed code in this file.
 """
 
 import socket
@@ -54,10 +54,19 @@ def count_images(label):
 
 
 def get_next_filename(label):
-    """Generate the next sequential filename for a label."""
+    """Generate the next sequential filename for a label.
+    Uses max existing index + 1 to avoid overwriting after manual cleanup."""
     folder = DATASET_DIR / label
-    idx = count_images(label)
-    return folder / f"{label}_{idx:04d}.bmp"
+    existing = list(folder.glob(f"{label}_*.bmp"))
+    if not existing:
+        return folder / f"{label}_0000.bmp"
+    # Find highest existing index
+    max_idx = max(
+        int(f.stem.split("_")[-1])
+        for f in existing
+        if f.stem.split("_")[-1].isdigit()
+    )
+    return folder / f"{label}_{max_idx + 1:04d}.bmp"
 
 
 def receive_one_image(server_sock):

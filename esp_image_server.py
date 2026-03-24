@@ -22,7 +22,7 @@ import socket
 from time import sleep
 
 # ─── Configuration ───
-SSID = "V\u2019s iPhone"  # curly apostrophe to match iPhone's actual SSID
+SSID = "V’s iPhone"  # curly apostrophe to match iPhone's actual SSID
 PASSWORD = "temppwdesp"
 
 # *** CHANGE THIS to your Mac's IP address ***

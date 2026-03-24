@@ -38,7 +38,7 @@ MODEL_OUTPUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_d
 WEIGHTS_JSON = os.path.join(os.path.dirname(os.path.abspath(__file__)), "model_weights.json")
 IMG_SIZE = 32
 LEARNING_RATE = 0.001
-EPOCHS = 60
+EPOCHS = 30
 BATCH_SIZE = 16
 VAL_SPLIT = 0.2  # 20% for validation
 
@@ -75,6 +75,52 @@ def load_bmp_grayscale(filepath):
     return pixels
 
 
+def normalize_orientation(img_2d):
+    """Rotate a 32x32 binary image so the hand always enters from the top.
+
+    Strategy: count black pixels on each edge (top/bottom/left/right).
+    The edge with the most black pixels is where the arm enters.
+    Rotate so that edge becomes the TOP side.
+
+    This ensures consistent orientation regardless of how the camera
+    is positioned relative to the hand.
+
+    Works with both numpy arrays and plain 2D lists.
+    """
+    if isinstance(img_2d, np.ndarray):
+        h, w = img_2d.shape[:2]
+        if img_2d.ndim == 3:
+            img = img_2d[:, :, 0]
+        else:
+            img = img_2d
+
+        # Count black pixels (value < 0.5) on each edge
+        top = np.sum(img[0, :] < 0.5)
+        bottom = np.sum(img[-1, :] < 0.5)
+        left = np.sum(img[:, 0] < 0.5)
+        right = np.sum(img[:, -1] < 0.5)
+
+        counts = {'top': top, 'bottom': bottom, 'left': left, 'right': right}
+        dominant = max(counts, key=counts.get)
+
+        # Rotate so dominant edge becomes TOP
+        if dominant == 'top':
+            rotated = img  # already correct
+        elif dominant == 'bottom':
+            rotated = np.rot90(img, 2)  # 180 degrees
+        elif dominant == 'left':
+            rotated = np.rot90(img, -1)  # 90 CW: left→top
+        elif dominant == 'right':
+            rotated = np.rot90(img, 1)  # 90 CCW: right→top
+
+        if img_2d.ndim == 3:
+            return rotated[:, :, np.newaxis]
+        return rotated
+    else:
+        # Plain list version (for ESP MicroPython compatibility testing)
+        return img_2d
+
+
 # ─── Data Loading ───
 def load_dataset(dataset_dir):
     """Load all BMP images from class subfolders.
@@ -99,6 +145,8 @@ def load_dataset(dataset_dir):
         for f in files:
             img = load_bmp_grayscale(os.path.join(class_dir, f))
             if img is not None:
+                # Normalize orientation so hand always enters from left
+                img = normalize_orientation(img)
                 images.append(img)
                 labels.append(class_idx)
                 loaded += 1
@@ -123,11 +171,14 @@ def augment_image(img):
     result = img.copy()
     h, w, c = result.shape
 
+    # NO rotation augmentation — orientation is normalized before training
+    # so all images have the hand entering from the left side
+
     # Random horizontal flip (50% chance)
     if random.random() > 0.5:
         result = result[:, ::-1, :]
 
-    # Random vertical flip (20% chance) — hand could be upside down
+    # Random vertical flip (20% chance)
     if random.random() > 0.8:
         result = result[::-1, :, :]
 
