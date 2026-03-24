@@ -102,7 +102,7 @@ def process_classification(data):
 # ─── ESP Receiver Thread ───
 def esp_receiver():
     """Listen for incoming frames and classifications from ESP."""
-    global frame_count
+    global frame_count, latest_status
 
     server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -142,18 +142,19 @@ def esp_receiver():
             client.close()
 
             if msg_type == 0x01:
-                # Raw camera frame
+                # Raw camera frame just arrived — ESP is now classifying
                 frame_count += 1
+                latest_status = "classifying"
                 process_raw_bmp(data)
                 if frame_count % 10 == 1:
                     print(f"[FRAME] #{frame_count} received ({len(data)} bytes)")
             elif msg_type == 0x02:
-                # Classification result
+                # Classification result ready
                 process_classification(data)
                 latest_status = "done"
                 print(f"[CLASS] {latest_classification} ({latest_confidence:.0%}) | {latest_inference_ms}ms")
             elif msg_type == 0x03:
-                # Status update
+                # Status update (kept for compatibility)
                 latest_status = data.decode()
 
         except socket.timeout:
@@ -167,6 +168,7 @@ def esp_receiver():
 HTML_PAGE = """<!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>RPS Live Classifier</title>
     <style>
         body {
@@ -228,8 +230,8 @@ HTML_PAGE = """<!DOCTYPE html>
     </style>
 </head>
 <body>
-    <h1>Rock Paper Scissors — Live Classifier</h1>
-    <p style="color:#666">XIAO ESP32S3 Sense — Single-shot CNN Inference</p>
+    <h1>Rock Paper Scissors - Live Classifier</h1>
+    <p style="color:#666">XIAO ESP32S3 Sense - Single-shot CNN Inference</p>
 
     <div class="status-bar status-waiting" id="status_badge">WAITING FOR ESP</div>
 
